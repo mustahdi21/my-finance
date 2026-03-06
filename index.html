@@ -201,6 +201,8 @@
         let dataStore = { transactions: [], debts: [] };
         let editMode = { active: false, id: null };
         let activeDebtFilter = 'all';
+        let currentTab = 'transactions';
+        let autoSyncInterval; // Timer untuk sinkronisasi otomatis
 
         window.onload = () => { 
             lucide.createIcons(); 
@@ -213,9 +215,17 @@
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('main-app').classList.remove('hidden');
             await loadInitialData();
+            
+            // Mulai Auto-Sync setiap 30 detik
+            startAutoSync();
         }
 
-        function logout() { location.reload(); }
+        function logout() { 
+            stopAutoSync();
+            location.reload(); 
+        }
+
+        // --- CORE SYNC LOGIC ---
 
         async function loadInitialData() {
             showLoader(true);
@@ -227,9 +237,34 @@
             showLoader(false);
         }
 
+        // Sinkronisasi tanpa memblokir layar (Silent)
+        async function silentSync() {
+            try {
+                const res = await fetch(SCRIPT_URL);
+                const newData = await res.json();
+                
+                // Cek apakah data benar-benar berubah sebelum render ulang
+                if (JSON.stringify(newData) !== JSON.stringify(dataStore)) {
+                    dataStore = newData;
+                    refreshUI();
+                    console.log("Auto-synced successfully");
+                }
+            } catch (e) { console.warn("Silent sync failed", e); }
+        }
+
+        function startAutoSync() {
+            if(autoSyncInterval) clearInterval(autoSyncInterval);
+            autoSyncInterval = setInterval(silentSync, 30000); // 30 detik
+        }
+
+        function stopAutoSync() {
+            if(autoSyncInterval) clearInterval(autoSyncInterval);
+        }
+
         function refreshUI() {
             renderTransactions();
             renderDebts();
+            if(currentTab === 'analytics') renderCharts();
             lucide.createIcons();
         }
 
@@ -338,17 +373,6 @@
             closeModal();
         }
 
-        function openEditDebt(id) {
-            const d = dataStore.debts.find(item => item.id == id);
-            editMode = { active: true, id: id };
-            document.getElementById('modal-d-title').innerText = "Edit Pinjaman";
-            document.getElementById('d-type').value = d.type;
-            document.getElementById('d-name').value = d.name;
-            document.getElementById('d-amount').value = d.amount;
-            document.getElementById('d-date').value = d.dateRaw || new Date().toISOString().split('T')[0];
-            openModal('debt');
-        }
-
         async function saveDebt() {
             const amount = document.getElementById('d-amount').value;
             const name = document.getElementById('d-name').value;
@@ -357,9 +381,7 @@
 
             if(!amount || !name) return;
             showLoader(true);
-            
             const id = editMode.active ? editMode.id : Date.now();
-            // Kolom: [ID, Type, Name, Amount, DateRaw]
             const row = [id, type, name, amount, date];
 
             await fetch(SCRIPT_URL, { 
@@ -396,6 +418,7 @@
 
         // --- UI TOOLS ---
         function switchTab(viewId) {
+            currentTab = viewId;
             document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
             document.getElementById(`view-${viewId}`).classList.remove('hidden');
             document.getElementById('home-balance-card').style.display = (viewId === 'transactions') ? 'block' : 'none';
@@ -419,9 +442,9 @@
         function closeModal() {
             document.getElementById('modal-overlay').classList.add('hidden');
             document.querySelectorAll('.modal-animate').forEach(m => m.classList.add('hidden'));
+            editMode = { active: false, id: null };
             
             // Reset Transaction Form
-            editMode = { active: false, id: null };
             document.getElementById('modal-t-title').innerText = "Tambah Transaksi";
             document.getElementById('t-amount').value = '';
             document.getElementById('t-note').value = '';
@@ -454,6 +477,17 @@
             document.getElementById('t-note').value = t.note;
             setModalType(t.type);
             openModal('transaction');
+        }
+
+        function openEditDebt(id) {
+            const d = dataStore.debts.find(item => item.id == id);
+            editMode = { active: true, id: id };
+            document.getElementById('modal-d-title').innerText = "Edit Pinjaman";
+            document.getElementById('d-type').value = d.type;
+            document.getElementById('d-name').value = d.name;
+            document.getElementById('d-amount').value = d.amount;
+            document.getElementById('d-date').value = d.dateRaw || new Date().toISOString().split('T')[0];
+            openModal('debt');
         }
 
         function exportToPDF() {
