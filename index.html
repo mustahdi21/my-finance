@@ -17,7 +17,7 @@
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .modal-animate { animation: slideUp 0.3s ease-out; }
-        .loading-overlay { background: rgba(255,255,255,0.8); position: fixed; inset: 0; z-index: 200; display: flex; items-center; justify-center; flex-direction: column; gap: 10px; }
+        .loading-overlay { background: rgba(255,255,255,0.8); position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
         .filter-chip { transition: all 0.2s; border: 1px solid #e2e8f0; }
         .filter-chip.active { background: #3b82f6; color: white; border-color: #3b82f6; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -91,7 +91,6 @@
                             <i data-lucide="file-text" class="w-4 h-4"></i> Simpan ke PDF
                         </button>
                     </div>
-
                     <div id="transaction-list-mobile" class="space-y-3"></div>
                 </div>
 
@@ -176,12 +175,13 @@
 
         <div id="modal-debt" class="bg-white rounded-t-[2.5rem] w-full p-8 modal-animate hidden">
             <div class="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6"></div>
-            <h3 class="text-xl font-bold mb-6">Catat Pinjaman</h3>
+            <h3 id="modal-d-title" class="text-xl font-bold mb-6">Catat Pinjaman</h3>
             <div class="space-y-4">
                 <select id="d-type" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none font-bold">
                     <option value="utang">Utang (Saya Pinjam)</option>
                     <option value="piutang">Piutang (Orang Pinjam)</option>
                 </select>
+                <input type="date" id="d-date" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none">
                 <input type="text" id="d-name" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none" placeholder="Nama Orang">
                 <div class="relative">
                     <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
@@ -204,7 +204,7 @@
 
         window.onload = () => { 
             lucide.createIcons(); 
-            resetFilters(); // Set default date
+            resetFilters(); 
         };
 
         function showLoader(show) { document.getElementById('global-loader').style.display = show ? 'flex' : 'none'; }
@@ -239,29 +239,26 @@
             const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
             document.getElementById('filter-start').value = firstDay;
             document.getElementById('filter-end').value = lastDay;
-            if(dataStore.transactions.length > 0) renderTransactions();
+            if(dataStore.transactions && dataStore.transactions.length > 0) renderTransactions();
         }
 
-        // --- RENDER TRANSAKSI DENGAN FILTER ---
         function renderTransactions() {
             const start = document.getElementById('filter-start').value;
             const end = document.getElementById('filter-end').value;
             const container = document.getElementById('transaction-list-mobile');
             
-            // Filter Data
             const filtered = dataStore.transactions.filter(t => {
                 const d = t.dateRaw;
                 return d >= start && d <= end;
             }).sort((a,b) => new Date(b.dateRaw) - new Date(a.dateRaw));
 
-            // Update Summary Card (Only filtered data)
             const inc = filtered.filter(t => t.type === 'pemasukan').reduce((a, b) => a + Number(b.amount), 0);
             const exp = filtered.filter(t => t.type === 'pengeluaran').reduce((a, b) => a + Number(b.amount), 0);
             document.getElementById('total-balance').innerText = `Rp ${(inc - exp).toLocaleString('id-ID')}`;
             document.getElementById('total-income').innerText = `Rp ${inc.toLocaleString('id-ID')}`;
             document.getElementById('total-expense').innerText = `Rp ${exp.toLocaleString('id-ID')}`;
 
-            window.currentFilteredData = filtered; // Simpan untuk PDF
+            window.currentFilteredData = filtered;
 
             if(filtered.length === 0) {
                 container.innerHTML = '<div class="text-center py-10 opacity-30 font-bold">Tidak ada data di periode ini</div>';
@@ -288,7 +285,6 @@
             lucide.createIcons();
         }
 
-        // --- RENDER UTANG DENGAN FILTER TAB ---
         function filterDebtTab(type) {
             activeDebtFilter = type;
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
@@ -312,13 +308,14 @@
 
             container.innerHTML = filtered.map(d => `
                 <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex justify-between items-center">
-                    <div>
+                    <div onclick="openEditDebt('${d.id}')" class="flex-1 active:opacity-50 transition cursor-pointer">
                         <p class="text-[9px] font-black uppercase tracking-widest ${d.type === 'utang' ? 'text-red-400' : 'text-blue-400'}">${d.type}</p>
                         <h5 class="font-bold text-slate-800">${d.name}</h5>
+                        <p class="text-[10px] text-slate-400 mb-1">${d.dateRaw || ''}</p>
                         <p class="font-black text-lg">Rp ${Number(d.amount).toLocaleString('id-ID')}</p>
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="payDebt('${d.id}')" class="bg-green-500 text-white px-3 py-2 rounded-xl text-[10px] font-black">LUNAS</button>
+                        <button onclick="payDebt('${d.id}')" class="bg-green-500 text-white px-3 py-2 rounded-xl text-[10px] font-black shadow-md active:scale-95">LUNAS</button>
                         <button onclick="deleteItem('debts', '${d.id}')" class="text-slate-200 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>
                 </div>
@@ -326,33 +323,8 @@
             lucide.createIcons();
         }
 
-        // --- EXPORT PDF (Sesuai Filter) ---
-        function exportToPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const start = document.getElementById('filter-start').value;
-            const end = document.getElementById('filter-end').value;
+        // --- CRUD LOGIC ---
 
-            doc.setFontSize(18);
-            doc.text("Laporan Keuangan Finance Pro", 14, 20);
-            doc.setFontSize(10);
-            doc.text(`Periode: ${start} s/d ${end}`, 14, 28);
-
-            const body = window.currentFilteredData.map(t => [
-                t.dateDisplay, t.category, t.note, 
-                t.type === 'pemasukan' ? `+${Number(t.amount)}` : `-${Number(t.amount)}`
-            ]);
-
-            doc.autoTable({
-                startY: 35,
-                head: [['Tanggal', 'Kategori', 'Keterangan', 'Jumlah']],
-                body: body,
-                headStyles: { fillColor: [59, 130, 246] }
-            });
-            doc.save(`Laporan_${start}_to_${end}.pdf`);
-        }
-
-        // --- CRUD LOGIC (Tetap Sama) ---
         async function saveTransaction() {
             const amount = document.getElementById('t-amount').value;
             const date = document.getElementById('t-date').value;
@@ -366,19 +338,46 @@
             closeModal();
         }
 
+        function openEditDebt(id) {
+            const d = dataStore.debts.find(item => item.id == id);
+            editMode = { active: true, id: id };
+            document.getElementById('modal-d-title').innerText = "Edit Pinjaman";
+            document.getElementById('d-type').value = d.type;
+            document.getElementById('d-name').value = d.name;
+            document.getElementById('d-amount').value = d.amount;
+            document.getElementById('d-date').value = d.dateRaw || new Date().toISOString().split('T')[0];
+            openModal('debt');
+        }
+
         async function saveDebt() {
             const amount = document.getElementById('d-amount').value;
             const name = document.getElementById('d-name').value;
+            const date = document.getElementById('d-date').value || new Date().toISOString().split('T')[0];
+            const type = document.getElementById('d-type').value;
+
             if(!amount || !name) return;
             showLoader(true);
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'add', sheet: 'debts', row: [Date.now(), document.getElementById('d-type').value, name, amount] })});
+            
+            const id = editMode.active ? editMode.id : Date.now();
+            // Kolom: [ID, Type, Name, Amount, DateRaw]
+            const row = [id, type, name, amount, date];
+
+            await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ 
+                    action: editMode.active ? 'update' : 'add', 
+                    sheet: 'debts', 
+                    id: id, 
+                    row: row 
+                })
+            });
             await loadInitialData();
             closeModal();
         }
 
         async function payDebt(id) {
             const d = dataStore.debts.find(i => i.id == id);
-            if(!confirm("Lunaskan pinjaman ini?")) return;
+            if(!confirm(`Lunaskan pinjaman ${d.name} senilai Rp ${Number(d.amount).toLocaleString('id-ID')}?`)) return;
             showLoader(true);
             const typeT = (d.type === 'utang') ? 'pengeluaran' : 'pemasukan';
             const today = new Date().toISOString().split('T')[0];
@@ -411,13 +410,26 @@
         function openModal(type) {
             document.getElementById('modal-overlay').classList.remove('hidden');
             document.getElementById(`modal-${type}`).classList.remove('hidden');
+            if(!editMode.active) {
+                if(type === 'transaction') document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+                if(type === 'debt') document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
+            }
         }
 
         function closeModal() {
             document.getElementById('modal-overlay').classList.add('hidden');
             document.querySelectorAll('.modal-animate').forEach(m => m.classList.add('hidden'));
+            
+            // Reset Transaction Form
             editMode = { active: false, id: null };
             document.getElementById('modal-t-title').innerText = "Tambah Transaksi";
+            document.getElementById('t-amount').value = '';
+            document.getElementById('t-note').value = '';
+            
+            // Reset Debt Form
+            document.getElementById('modal-d-title').innerText = "Catat Pinjaman";
+            document.getElementById('d-amount').value = '';
+            document.getElementById('d-name').value = '';
         }
 
         function setModalType(type) {
@@ -444,9 +456,36 @@
             openModal('transaction');
         }
 
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const start = document.getElementById('filter-start').value;
+            const end = document.getElementById('filter-end').value;
+
+            doc.setFontSize(18);
+            doc.text("Laporan Keuangan Finance Pro", 14, 20);
+            doc.setFontSize(10);
+            doc.text(`Periode: ${start} s/d ${end}`, 14, 28);
+
+            const body = (window.currentFilteredData || []).map(t => [
+                t.dateDisplay, t.category, t.note, 
+                t.type === 'pemasukan' ? `+${Number(t.amount)}` : `-${Number(t.amount)}`
+            ]);
+
+            doc.autoTable({
+                startY: 35,
+                head: [['Tanggal', 'Kategori', 'Keterangan', 'Jumlah']],
+                body: body,
+                headStyles: { fillColor: [59, 130, 246] }
+            });
+            doc.save(`Laporan_${start}_to_${end}.pdf`);
+        }
+
         let mChart;
         function renderCharts() {
-            const ctx = document.getElementById('monthlyChart').getContext('2d');
+            const canvas = document.getElementById('monthlyChart');
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
             if(mChart) mChart.destroy();
             const inc = dataStore.transactions.filter(t=>t.type==='pemasukan').reduce((a,b)=>a+Number(b.amount),0);
             const exp = dataStore.transactions.filter(t=>t.type==='pengeluaran').reduce((a,b)=>a+Number(b.amount),0);
