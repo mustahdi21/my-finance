@@ -187,6 +187,7 @@
                     <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
                     <input type="number" id="d-amount" class="w-full p-4 pl-12 bg-slate-100 border-none rounded-2xl outline-none font-bold" placeholder="0">
                 </div>
+                <input type="text" id="d-note" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none" placeholder="Keterangan (Optional)">
                 <div class="flex gap-3 pt-4">
                     <button onclick="closeModal()" class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Batal</button>
                     <button onclick="saveDebt()" class="flex-1 py-4 bg-orange-600 text-white rounded-2xl font-bold shadow-lg">Simpan</button>
@@ -202,7 +203,7 @@
         let editMode = { active: false, id: null };
         let activeDebtFilter = 'all';
         let currentTab = 'transactions';
-        let autoSyncInterval; // Timer untuk sinkronisasi otomatis
+        let autoSyncInterval;
 
         window.onload = () => { 
             lucide.createIcons(); 
@@ -215,8 +216,6 @@
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('main-app').classList.remove('hidden');
             await loadInitialData();
-            
-            // Mulai Auto-Sync setiap 30 detik
             startAutoSync();
         }
 
@@ -224,8 +223,6 @@
             stopAutoSync();
             location.reload(); 
         }
-
-        // --- CORE SYNC LOGIC ---
 
         async function loadInitialData() {
             showLoader(true);
@@ -237,24 +234,21 @@
             showLoader(false);
         }
 
-        // Sinkronisasi tanpa memblokir layar (Silent)
         async function silentSync() {
             try {
                 const res = await fetch(SCRIPT_URL);
                 const newData = await res.json();
-                
-                // Cek apakah data benar-benar berubah sebelum render ulang
                 if (JSON.stringify(newData) !== JSON.stringify(dataStore)) {
                     dataStore = newData;
                     refreshUI();
-                    console.log("Auto-synced successfully");
+                    console.log("Auto-synced");
                 }
-            } catch (e) { console.warn("Silent sync failed", e); }
+            } catch (e) { console.warn("Sync failed"); }
         }
 
         function startAutoSync() {
             if(autoSyncInterval) clearInterval(autoSyncInterval);
-            autoSyncInterval = setInterval(silentSync, 30000); // 30 detik
+            autoSyncInterval = setInterval(silentSync, 30000);
         }
 
         function stopAutoSync() {
@@ -296,7 +290,7 @@
             window.currentFilteredData = filtered;
 
             if(filtered.length === 0) {
-                container.innerHTML = '<div class="text-center py-10 opacity-30 font-bold">Tidak ada data di periode ini</div>';
+                container.innerHTML = '<div class="text-center py-10 opacity-30 font-bold">Tidak ada data</div>';
                 return;
             }
 
@@ -346,7 +340,8 @@
                     <div onclick="openEditDebt('${d.id}')" class="flex-1 active:opacity-50 transition cursor-pointer">
                         <p class="text-[9px] font-black uppercase tracking-widest ${d.type === 'utang' ? 'text-red-400' : 'text-blue-400'}">${d.type}</p>
                         <h5 class="font-bold text-slate-800">${d.name}</h5>
-                        <p class="text-[10px] text-slate-400 mb-1">${d.dateRaw || ''}</p>
+                        <p class="text-[10px] text-slate-500 italic mb-1">${d.note || '-'}</p>
+                        <p class="text-[9px] text-slate-400 mb-1">${d.dateRaw || ''}</p>
                         <p class="font-black text-lg">Rp ${Number(d.amount).toLocaleString('id-ID')}</p>
                     </div>
                     <div class="flex gap-2">
@@ -357,8 +352,6 @@
             `).join('');
             lucide.createIcons();
         }
-
-        // --- CRUD LOGIC ---
 
         async function saveTransaction() {
             const amount = document.getElementById('t-amount').value;
@@ -376,13 +369,15 @@
         async function saveDebt() {
             const amount = document.getElementById('d-amount').value;
             const name = document.getElementById('d-name').value;
+            const note = document.getElementById('d-note').value; // BARU
             const date = document.getElementById('d-date').value || new Date().toISOString().split('T')[0];
             const type = document.getElementById('d-type').value;
 
             if(!amount || !name) return;
             showLoader(true);
             const id = editMode.active ? editMode.id : Date.now();
-            const row = [id, type, name, amount, date];
+            // Struktur row disesuaikan (tambah note di akhir)
+            const row = [id, type, name, amount, date, note || '-'];
 
             await fetch(SCRIPT_URL, { 
                 method: 'POST', 
@@ -410,13 +405,12 @@
         }
 
         async function deleteItem(sheet, id) {
-            if(!confirm("Hapus data ini?")) return;
+            if(!confirm("Hapus data?")) return;
             showLoader(true);
             await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', sheet: sheet, id: id }) });
             await loadInitialData();
         }
 
-        // --- UI TOOLS ---
         function switchTab(viewId) {
             currentTab = viewId;
             document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
@@ -443,16 +437,13 @@
             document.getElementById('modal-overlay').classList.add('hidden');
             document.querySelectorAll('.modal-animate').forEach(m => m.classList.add('hidden'));
             editMode = { active: false, id: null };
-            
-            // Reset Transaction Form
             document.getElementById('modal-t-title').innerText = "Tambah Transaksi";
             document.getElementById('t-amount').value = '';
             document.getElementById('t-note').value = '';
-            
-            // Reset Debt Form
             document.getElementById('modal-d-title').innerText = "Catat Pinjaman";
             document.getElementById('d-amount').value = '';
             document.getElementById('d-name').value = '';
+            document.getElementById('d-note').value = ''; // Reset note
         }
 
         function setModalType(type) {
@@ -487,6 +478,7 @@
             document.getElementById('d-name').value = d.name;
             document.getElementById('d-amount').value = d.amount;
             document.getElementById('d-date').value = d.dateRaw || new Date().toISOString().split('T')[0];
+            document.getElementById('d-note').value = d.note || ''; // Set note
             openModal('debt');
         }
 
@@ -495,24 +487,10 @@
             const doc = new jsPDF();
             const start = document.getElementById('filter-start').value;
             const end = document.getElementById('filter-end').value;
-
-            doc.setFontSize(18);
-            doc.text("Laporan Keuangan Finance Pro", 14, 20);
-            doc.setFontSize(10);
-            doc.text(`Periode: ${start} s/d ${end}`, 14, 28);
-
-            const body = (window.currentFilteredData || []).map(t => [
-                t.dateDisplay, t.category, t.note, 
-                t.type === 'pemasukan' ? `+${Number(t.amount)}` : `-${Number(t.amount)}`
-            ]);
-
-            doc.autoTable({
-                startY: 35,
-                head: [['Tanggal', 'Kategori', 'Keterangan', 'Jumlah']],
-                body: body,
-                headStyles: { fillColor: [59, 130, 246] }
-            });
-            doc.save(`Laporan_${start}_to_${end}.pdf`);
+            doc.text("Laporan Keuangan", 14, 20);
+            const body = (window.currentFilteredData || []).map(t => [t.dateDisplay, t.category, t.note, t.amount]);
+            doc.autoTable({ startY: 30, head: [['Tanggal', 'Kategori', 'Ket', 'Jumlah']], body: body });
+            doc.save(`Laporan.pdf`);
         }
 
         let mChart;
@@ -525,10 +503,7 @@
             const exp = dataStore.transactions.filter(t=>t.type==='pengeluaran').reduce((a,b)=>a+Number(b.amount),0);
             mChart = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
-                    labels: ['Masuk', 'Keluar'],
-                    datasets: [{ data: [inc, exp], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }]
-                },
+                data: { labels: ['Masuk', 'Keluar'], datasets: [{ data: [inc, exp], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }] },
                 options: { cutout: '70%', plugins: { legend: { position: 'bottom' } } }
             });
         }
