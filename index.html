@@ -323,12 +323,12 @@
 
                 if (type === 'pemasukan') {
                     inc += amt;
-                    if (walletType === 'bank') bankBal += amt;
+                    if (walletType === 'Bank') bankBal += amt;
                     else if (walletType.includes('wallet')) ewalletBal += amt;
                     else cashBal += amt;
                 } else if (type === 'pengeluaran') {
                     exp += amt;
-                    if (walletType === 'bank') bankBal -= amt;
+                    if (walletType === 'Bank') bankBal -= amt;
                     else if (walletType.includes('wallet')) ewalletBal -= amt;
                     else cashBal -= amt;
                 }
