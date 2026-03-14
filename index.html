@@ -61,14 +61,31 @@
                 <div class="relative z-10">
                     <p class="opacity-80 text-sm font-medium">Saldo Periode Ini</p>
                     <h2 id="total-balance" class="text-3xl font-bold mt-1">Rp 0</h2>
-                    <div class="grid grid-cols-2 gap-4 mt-6">
+                    
+                    <div class="grid grid-cols-2 gap-3 mt-5">
                         <div class="bg-white/10 p-3 rounded-2xl backdrop-blur-md">
-                            <p class="text-[10px] uppercase opacity-70 font-bold">In</p>
+                            <p class="text-[10px] uppercase opacity-70 font-bold tracking-wider">In</p>
                             <p id="total-income" class="font-bold text-sm">Rp 0</p>
                         </div>
                         <div class="bg-white/10 p-3 rounded-2xl backdrop-blur-md">
-                            <p class="text-[10px] uppercase opacity-70 font-bold">Out</p>
+                            <p class="text-[10px] uppercase opacity-70 font-bold tracking-wider">Out</p>
                             <p id="total-expense" class="font-bold text-sm">Rp 0</p>
+                        </div>
+                    </div>
+
+                    <!-- Tambahan Posisi Uang (Cash, Bank, E-Wallet) -->
+                    <div class="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-white/20">
+                        <div class="text-center">
+                            <p class="text-[9px] uppercase opacity-70 font-bold">Cash</p>
+                            <p id="bal-cash" class="font-bold text-[11px] mt-0.5">Rp 0</p>
+                        </div>
+                        <div class="text-center border-l border-white/20">
+                            <p class="text-[9px] uppercase opacity-70 font-bold">Bank</p>
+                            <p id="bal-bank" class="font-bold text-[11px] mt-0.5">Rp 0</p>
+                        </div>
+                        <div class="text-center border-l border-white/20">
+                            <p class="text-[9px] uppercase opacity-70 font-bold">E-Wallet</p>
+                            <p id="bal-ewallet" class="font-bold text-[11px] mt-0.5">Rp 0</p>
                         </div>
                     </div>
                 </div>
@@ -159,12 +176,22 @@
                     <button onclick="setModalType('pengeluaran')" id="type-exp" class="flex-1 py-3 rounded-xl text-sm font-bold text-slate-500">Pengeluaran</button>
                 </div>
                 <input type="hidden" id="t-type" value="pemasukan">
-                <input type="date" id="t-date" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none">
+                
+                <!-- Input Tanggal & Akun (Lokasi Uang) -->
+                <div class="flex gap-2">
+                    <input type="date" id="t-date" class="w-1/2 p-4 bg-slate-100 border-none rounded-2xl outline-none text-sm">
+                    <select id="t-wallet" class="w-1/2 p-4 bg-slate-100 border-none rounded-2xl outline-none font-bold text-sm text-slate-600">
+                        <option value="Cash">Cash (Tunai)</option>
+                        <option value="Bank">Bank</option>
+                        <option value="E-Wallet">E-Wallet</option>
+                    </select>
+                </div>
+
                 <div class="relative">
                     <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
                     <input type="number" id="t-amount" class="w-full p-4 pl-12 bg-slate-100 border-none rounded-2xl outline-none font-bold" placeholder="0">
                 </div>
-                <input type="text" id="t-category" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none" placeholder="Kategori">
+                <input type="text" id="t-category" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none" placeholder="Kategori (Misal: Makanan, Gaji)">
                 <input type="text" id="t-note" class="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none" placeholder="Keterangan">
                 <div class="flex gap-3 pt-4">
                     <button onclick="closeModal()" class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Batal</button>
@@ -281,11 +308,36 @@
                 return d >= start && d <= end;
             }).sort((a,b) => new Date(b.dateRaw) - new Date(a.dateRaw));
 
-            const inc = filtered.filter(t => t.type === 'pemasukan').reduce((a, b) => a + Number(b.amount), 0);
-            const exp = filtered.filter(t => t.type === 'pengeluaran').reduce((a, b) => a + Number(b.amount), 0);
+            let inc = 0, exp = 0;
+            let cashBal = 0, bankBal = 0, ewalletBal = 0;
+
+            filtered.forEach(t => {
+                const amt = Number(t.amount);
+                // Baca property wallet atau fallback ke index ke 7 jika apps script mengirim format array, default Cash
+                const walletType = t.wallet || t[7] || 'Cash'; 
+                const wFormat = walletType.toLowerCase();
+
+                if (t.type === 'pemasukan') {
+                    inc += amt;
+                    if (wFormat === 'bank') bankBal += amt;
+                    else if (wFormat === 'e-wallet' || wFormat === 'ewallet') ewalletBal += amt;
+                    else cashBal += amt;
+                } else if (t.type === 'pengeluaran') {
+                    exp += amt;
+                    if (wFormat === 'bank') bankBal -= amt;
+                    else if (wFormat === 'e-wallet' || wFormat === 'ewallet') ewalletBal -= amt;
+                    else cashBal -= amt;
+                }
+            });
+
             document.getElementById('total-balance').innerText = `Rp ${(inc - exp).toLocaleString('id-ID')}`;
             document.getElementById('total-income').innerText = `Rp ${inc.toLocaleString('id-ID')}`;
             document.getElementById('total-expense').innerText = `Rp ${exp.toLocaleString('id-ID')}`;
+            
+            // Render saldo wallet
+            document.getElementById('bal-cash').innerText = `Rp ${cashBal.toLocaleString('id-ID')}`;
+            document.getElementById('bal-bank').innerText = `Rp ${bankBal.toLocaleString('id-ID')}`;
+            document.getElementById('bal-ewallet').innerText = `Rp ${ewalletBal.toLocaleString('id-ID')}`;
 
             window.currentFilteredData = filtered;
 
@@ -294,15 +346,17 @@
                 return;
             }
 
-            container.innerHTML = filtered.map(t => `
+            container.innerHTML = filtered.map(t => {
+                const walletType = t.wallet || t[7] || 'Cash';
+                return `
                 <div class="bg-white p-4 rounded-3xl flex items-center gap-3 shadow-sm border border-slate-50">
-                    <div onclick="openEdit('${t.id}')" class="flex-1 flex items-center gap-3 active:opacity-50 transition">
+                    <div onclick="openEdit('${t.id}')" class="flex-1 flex items-center gap-3 active:opacity-50 transition cursor-pointer">
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center ${t.type === 'pemasukan' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}">
                             <i data-lucide="${t.type === 'pemasukan' ? 'arrow-down-left' : 'arrow-up-right'}" class="w-5 h-5"></i>
                         </div>
                         <div>
                             <h5 class="font-bold text-sm text-slate-800 leading-tight">${t.note}</h5>
-                            <p class="text-[10px] text-slate-400 font-medium">${t.category} • ${t.dateDisplay}</p>
+                            <p class="text-[10px] text-slate-400 font-medium">${t.category} • ${t.dateDisplay} • <span class="text-blue-500 font-bold">${walletType}</span></p>
                         </div>
                     </div>
                     <div class="text-right">
@@ -310,7 +364,7 @@
                         <button onclick="deleteItem('transactions', '${t.id}')" class="text-[10px] text-slate-300 font-bold">HAPUS</button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
             lucide.createIcons();
         }
 
@@ -356,11 +410,16 @@
         async function saveTransaction() {
             const amount = document.getElementById('t-amount').value;
             const date = document.getElementById('t-date').value;
+            const wallet = document.getElementById('t-wallet').value;
             if(!amount || !date) return;
+            
             showLoader(true);
             const dateDisp = new Date(date).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
             const id = editMode.active ? editMode.id : Date.now();
-            const row = [id, date, dateDisp, document.getElementById('t-type').value, amount, document.getElementById('t-category').value || 'Umum', document.getElementById('t-note').value || '-'];
+            
+            // Menambahkan elemen wallet di akhir array untuk kompatibilitas ke Google Sheets
+            const row = [id, date, dateDisp, document.getElementById('t-type').value, amount, document.getElementById('t-category').value || 'Umum', document.getElementById('t-note').value || '-', wallet];
+            
             await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: editMode.active ? 'update' : 'add', sheet: 'transactions', id: id, row: row })});
             await loadInitialData();
             closeModal();
@@ -369,14 +428,13 @@
         async function saveDebt() {
             const amount = document.getElementById('d-amount').value;
             const name = document.getElementById('d-name').value;
-            const note = document.getElementById('d-note').value; // BARU
+            const note = document.getElementById('d-note').value;
             const date = document.getElementById('d-date').value || new Date().toISOString().split('T')[0];
             const type = document.getElementById('d-type').value;
 
             if(!amount || !name) return;
             showLoader(true);
             const id = editMode.active ? editMode.id : Date.now();
-            // Struktur row disesuaikan (tambah note di akhir)
             const row = [id, type, name, amount, date, note || '-'];
 
             await fetch(SCRIPT_URL, { 
@@ -399,7 +457,9 @@
             const typeT = (d.type === 'utang') ? 'pengeluaran' : 'pemasukan';
             const today = new Date().toISOString().split('T')[0];
             const disp = new Date().toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'add', sheet: 'transactions', row: [Date.now(), today, disp, typeT, d.amount, 'Pelunasan', `Lunas: ${d.name}`] })});
+            
+            // Transaksi pelunasan utang otomatis masuk ke 'Cash'
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'add', sheet: 'transactions', row: [Date.now(), today, disp, typeT, d.amount, 'Pelunasan', `Lunas: ${d.name}`, 'Cash'] })});
             await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', sheet: 'debts', id: id })});
             await loadInitialData();
         }
@@ -428,7 +488,10 @@
             document.getElementById('modal-overlay').classList.remove('hidden');
             document.getElementById(`modal-${type}`).classList.remove('hidden');
             if(!editMode.active) {
-                if(type === 'transaction') document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+                if(type === 'transaction') {
+                    document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+                    document.getElementById('t-wallet').value = 'Cash';
+                }
                 if(type === 'debt') document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
             }
         }
@@ -437,13 +500,17 @@
             document.getElementById('modal-overlay').classList.add('hidden');
             document.querySelectorAll('.modal-animate').forEach(m => m.classList.add('hidden'));
             editMode = { active: false, id: null };
+            
             document.getElementById('modal-t-title').innerText = "Tambah Transaksi";
             document.getElementById('t-amount').value = '';
+            document.getElementById('t-category').value = '';
             document.getElementById('t-note').value = '';
+            document.getElementById('t-wallet').value = 'Cash';
+            
             document.getElementById('modal-d-title').innerText = "Catat Pinjaman";
             document.getElementById('d-amount').value = '';
             document.getElementById('d-name').value = '';
-            document.getElementById('d-note').value = ''; // Reset note
+            document.getElementById('d-note').value = '';
         }
 
         function setModalType(type) {
@@ -466,6 +533,7 @@
             document.getElementById('t-date').value = t.dateRaw;
             document.getElementById('t-category').value = t.category;
             document.getElementById('t-note').value = t.note;
+            document.getElementById('t-wallet').value = t.wallet || t[7] || 'Cash';
             setModalType(t.type);
             openModal('transaction');
         }
@@ -478,7 +546,7 @@
             document.getElementById('d-name').value = d.name;
             document.getElementById('d-amount').value = d.amount;
             document.getElementById('d-date').value = d.dateRaw || new Date().toISOString().split('T')[0];
-            document.getElementById('d-note').value = d.note || ''; // Set note
+            document.getElementById('d-note').value = d.note || ''; 
             openModal('debt');
         }
 
@@ -488,8 +556,10 @@
             const start = document.getElementById('filter-start').value;
             const end = document.getElementById('filter-end').value;
             doc.text("Laporan Keuangan", 14, 20);
-            const body = (window.currentFilteredData || []).map(t => [t.dateDisplay, t.category, t.note, t.amount]);
-            doc.autoTable({ startY: 30, head: [['Tanggal', 'Kategori', 'Ket', 'Jumlah']], body: body });
+            
+            // Include wallet type in PDF
+            const body = (window.currentFilteredData || []).map(t => [t.dateDisplay, t.category, t.note, t.wallet || t[7] || 'Cash', t.amount]);
+            doc.autoTable({ startY: 30, head: [['Tanggal', 'Kategori', 'Ket', 'Dompet', 'Jumlah']], body: body });
             doc.save(`Laporan.pdf`);
         }
 
