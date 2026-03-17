@@ -481,8 +481,17 @@
             const today = new Date().toISOString().split('T')[0];
             const disp = new Date().toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
             
+            const walletOptions = ['Cash', 'Bank', 'E-Wallet'];
+            const chosenWallet = prompt(`Pilih dompet untuk melunasi ${name}:\n(Cash, Bank, E-Wallet)`, "Cash");
+
+            if (!chosenWallet || !walletOptions.includes(chosenWallet)) {
+                alert("Pilihan dompet tidak valid. Pelunasan dibatalkan.");
+                showLoader(false);
+                return;
+            }
+            
             try {
-                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'add', sheet: 'transactions', row: [Date.now().toString(), today, disp, typeT, amt, 'Pelunasan', `Lunas: ${name}`, 'Cash'] })});
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'add', sheet: 'transactions', row: [Date.now().toString(), today, disp, typeT, amt, 'Pelunasan', `Lunas: ${name}`, chosenWallet] })});
                 await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', sheet: 'debts', id: id })});
                 await loadInitialData();
             } catch (e) { console.error("Payment error:", e); }
