@@ -229,6 +229,15 @@
             resetFilters(); 
         };
 
+        // Fungsi bantuan untuk mendapatkan tanggal lokal (menghindari offset UTC)
+        function getLocalDateString(d) {
+            const date = d || new Date();
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
         function showLoader(show) { document.getElementById('global-loader').style.display = show ? 'flex' : 'none'; }
 
         async function handleLogin() {
@@ -282,10 +291,12 @@
 
         function resetFilters() {
             const now = new Date();
-            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-            document.getElementById('filter-start').value = firstDay;
-            document.getElementById('filter-end').value = lastDay;
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            
+            // Gunakan format lokal agar tanggal tidak bergeser
+            document.getElementById('filter-start').value = getLocalDateString(firstDay);
+            document.getElementById('filter-end').value = getLocalDateString(lastDay);
             if(dataStore.transactions) renderTransactions();
         }
 
@@ -453,7 +464,7 @@
             if(!amt || !name) return;
             
             showLoader(true);
-            const date = document.getElementById('d-date').value || new Date().toISOString().split('T')[0];
+            const date = document.getElementById('d-date').value || getLocalDateString();
             const id = editMode.active ? editMode.id : Date.now().toString();
             const type = document.getElementById('d-type').value;
             const note = document.getElementById('d-note').value || '-';
@@ -478,7 +489,7 @@
             if(!confirm(`Lunaskan pinjaman ${name}?`)) return;
             showLoader(true);
             const typeT = (type === 'utang') ? 'pengeluaran' : 'pemasukan';
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalDateString();
             const disp = new Date().toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'});
             
             const walletOptions = ['Cash', 'Bank', 'E-Wallet'];
@@ -523,7 +534,7 @@
             document.getElementById('modal-overlay').classList.remove('hidden');
             document.getElementById(`modal-${type}`).classList.remove('hidden');
             if(!editMode.active) {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getLocalDateString();
                 if(type === 'transaction') document.getElementById('t-date').value = today;
                 if(type === 'debt') document.getElementById('d-date').value = today;
             }
